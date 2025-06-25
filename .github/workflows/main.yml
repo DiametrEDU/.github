@@ -18,7 +18,7 @@ jobs:
 
       - name: Получить данные об организации
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GIT_TOKEN }}
         run: |
           ORG="DiametrEDU"
           curl -s -H "Authorization: token $GITHUB_TOKEN" \
