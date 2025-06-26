@@ -1,127 +1,51 @@
 name: Generate Org Stats
 
 on:
+  # Запускаем раз в день в полночь
   schedule:
-    - cron: '0 0 * * *' # Каждый день в полночь
+    - cron: '0 0 * * *'
+  # Позволяет запускать вручную со страницы Actions
   workflow_dispatch:
 
 jobs:
   build-org-stats:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout репозиторий
-        uses: actions/checkout@v3
+      # Этот Action сгенерирует для нас красивый SVG файл со статистикой
+      - uses: lowlighter/metrics@latest
+        with:
+          # Имя файла, который будет создан
+          filename: org-stats.svg
 
-      - name: Установить зависимости
-        run: |
-          # --- ГЛАВНОЕ ИСПРАВЛЕНИЕ ЗДЕСЬ ---
-          # Добавлен 'bc' для математических вычислений
-          sudo apt-get update && sudo apt-get install -y jq curl bc
-
-      - name: Сгенерировать статистику языков
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          ORG="DiametrEDU"
+          # Токен для доступа к API GitHub
+          token: ${{ secrets.GITHUB_TOKEN }}
           
-          echo "1. Получение списка репозиториев..."
-          curl -s -H "Authorization: token $GITHUB_TOKEN" \
-            "https://api.github.com/orgs/$ORG/repos?per_page=100" > repos.json
-
-          echo "2. Сбор статистики по языкам..."
-          declare -A languages
-          total_bytes=0
+          # Указываем, что статистика нужна для организации, а не для пользователя
+          user: DiametrEDU
           
-          for repo in $(jq -r '.[].name' repos.json); do
-            echo "   - Обработка репозитория: $repo"
-            repo_langs_json=$(curl -s -H "Authorization: token $GITHUB_TOKEN" "https://api.github.com/repos/$ORG/$repo/languages")
+          # Указываем, какие плагины (блоки статистики) мы хотим видеть
+          # В данном случае, нам нужен только плагин с языками
+          base: "" # Оставляем пустым, чтобы убрать базовые блоки
+          plugins: |
+            languages
             
-            if [[ -z "$repo_langs_json" || "$repo_langs_json" == "{}" ]]; then
-              continue
-            fi
-            
-            for lang in $(echo "$repo_langs_json" | jq -r 'keys[]'); do
-              bytes=$(echo "$repo_langs_json" | jq ".\"$lang\"")
-              ((languages["$lang"]+=$bytes))
-              ((total_bytes+=$bytes))
-            done
-          done
+          # Настройки для плагина языков
+          plugin_languages: yes
+          plugin_languages_analysis_timeout: 15
+          plugin_languages_categories: markup, programming # Какие типы файлов считать
+          plugin_languages_colors: github # Используем стандартные цвета GitHub для языков
+          plugin_languages_limit: 8 # Показать 8 самых популярных языков
+          plugin_languages_threshold: 0% # Показывать языки, даже если их процент мал
+          plugin_languages_layout: compact # Компактный вид
 
-          if [[ $total_bytes -eq 0 ]]; then
-            echo "Языки не найдены. Создание пустого SVG."
-            echo "<svg width=\"600\" height=\"50\" xmlns=\"http://www.w3.org/2000/svg\"><text x=\"10\" y=\"20\">В организации DiametrEDU пока нет репозиториев с кодом.</text></svg>" > org-stats.svg
-            exit 0
-          fi
-
-          echo "3. Сортировка языков по размеру..."
-          sorted_langs=()
-          while IFS= read -r line; do
-              sorted_langs+=("$(echo "$line" | cut -d' ' -f2-)")
-          done < <(
-              for lang in "${!languages[@]}"; do
-                  printf "%d %s\n" "${languages["$lang"]}" "$lang"
-              done | sort -rn
-          )
-
-          echo "4. Генерация SVG диаграммы..."
-          palette=("#e6194b" "#3cb44b" "#ffe119" "#4363d8" "#f58231" "#911eb4" "#46f0f0" "#f032e6" "#bcf60c" "#fabebe" "#008080" "#e6beff" "#9a6324" "#fffac8" "#800000" "#aaffc3" "#808000" "#ffd8b1")
-          declare -A colors
-          i=0
-          for lang in "${sorted_langs[@]}"; do
-            colors["$lang"]=${palette[$((i % ${#palette[@]}))]}
-            ((i++))
-          done
-
-          polar_to_cartesian() {
-            local cx=$1 cy=$2 r=$3 angle=$4
-            local rad=$(echo "scale=10; $angle * 3.14159265 / 180" | bc -l)
-            local x=$(echo "scale=10; $cx + $r * c($rad)" | bc -l)
-            local y=$(echo "scale=10; $cy + $r * s($rad)" | bc -l)
-            echo "$x $y"
-          }
-
-          svg_file="org-stats.svg"
-          legend_height=$(( ${#sorted_langs[@]} * 20 + 40 ))
-          svg_height=$(( legend_height > 300 ? legend_height : 300 ))
-
-          echo "<svg width=\"600\" height=\"$svg_height\" viewBox=\"0 0 600 $svg_height\" xmlns=\"http://www.w3.org/2000/svg\">" > "$svg_file"
-          echo "  <style>text { font: 14px 'Segoe UI', 'Roboto', sans-serif; fill: #333; } .org-name { font-weight: bold; font-size: 16px; }</style>" >> "$svg_file"
-
-          start_angle=0
-          for lang in "${sorted_langs[@]}"; do
-            percent=$(echo "scale=10; ${languages["$lang"]} / $total_bytes" | bc)
-            angle=$(echo "$percent * 360" | bc -l)
-            if [ "$(echo "$angle < 0.1" | bc -l)" -eq 1 ]; then continue; fi
-            end_angle=$(echo "$start_angle + $angle" | bc -l)
-            read x1 y1 <<< $(polar_to_cartesian 150 150 100 $start_angle)
-            read x2 y2 <<< $(polar_to_cartesian 150 150 100 $end_angle)
-            large_arc=$(echo "$angle > 180" | bc)
-            echo "  <path d=\"M150,150 L$x1,$y1 A100,100 0 $large_arc,1 $x2,$y2 Z\" fill=\"${colors["$lang"]}\"/>" >> "$svg_file"
-            start_angle=$end_angle
-          done
-
-          echo "  <circle cx=\"150\" cy=\"150\" r=\"60\" fill=\"white\"/>" >> "$svg_file"
-          echo "  <text x=\"150\" y=\"150\" text-anchor=\"middle\" dominant-baseline=\"middle\" class=\"org-name\">$ORG</text>" >> "$svg_file"
-
-          legend_y=30
-          for lang in "${sorted_langs[@]}"; do
-            percent=$(echo "scale=2; ${languages["$lang"]} * 100 / $total_bytes" | bc)
-            if [ "$(echo "$percent < 0.1" | bc -l)" -eq 1 ]; then continue; fi
-            percent_display=$(printf "%.1f" "$percent")
-            echo "  <rect x=\"320\" y=\"$legend_y\" width=\"12\" height=\"12\" fill=\"${colors["$lang"]}\" rx=\"2\"/>" >> "$svg_file"
-            legend_text_y=$((legend_y + 11))
-            echo "  <text x=\"340\" y=\"$legend_text_y\">$lang (${percent_display}%%)</text>" >> "$svg_file"
-            legend_y=$((legend_y + 20))
-          done
-          
-          echo "</svg>" >> "$svg_file"
-          echo "5. SVG файл 'org-stats.svg' успешно сгенерирован."
-
+      # Этот шаг нужен, чтобы закоммитить сгенерированный файл в репозиторий
       - name: Коммит и пуш SVG
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Добавляем файл в отслеживаемые
           git add org-stats.svg
+          # Создаем коммит, только если файл изменился
           if ! git diff --staged --quiet; then
             git commit -m "📊 Обновление статистики языков организации"
             git push
