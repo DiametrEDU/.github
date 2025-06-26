@@ -1,0 +1,18 @@
+<svg width="600" height="20" xmlns="http://www.w3.org/2000/svg">
+<style>text { font: 14px sans-serif; }</style>
+<text x="0" y="15">🌐 Языки DiametrEDU: 
+<tspan dx="10">Python (43466 bytes)</tspan>
+<tspan dx="10">Dockerfile (220 bytes)</tspan>
+<tspan dx="10">TypeScript (87169 bytes)</tspan>
+<tspan dx="10">JavaScript (63838 bytes)</tspan>
+<tspan dx="10">Java (155888 bytes)</tspan>
+<tspan dx="10">Hack (404 bytes)</tspan>
+<tspan dx="10">CSS (33400 bytes)</tspan>
+<tspan dx="10">SCSS (8501 bytes)</tspan>
+<tspan dx="10">PHP (29275 bytes)</tspan>
+<tspan dx="10">PLpgSQL (68461 bytes)</tspan>
+<tspan dx="10">EJS (36822 bytes)</tspan>
+<tspan dx="10">Kotlin (258705 bytes)</tspan>
+<tspan dx="10">HTML (2108 bytes)</tspan>
+<tspan dx="10">C# (53381 bytes)</tspan>
+</text></svg>
