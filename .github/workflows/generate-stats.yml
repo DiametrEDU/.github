@@ -11,8 +11,16 @@ jobs:
   build-org-stats:
     runs-on: ubuntu-latest
     steps:
+      # --- ВАЖНОЕ ИСПРАВЛЕНИЕ ---
+      # Этот шаг загружает код вашего репозитория в рабочую область,
+      # чтобы git-команды и следующий шаг могли работать.
+      # Он должен быть ПЕРВЫМ.
+      - name: Checkout репозиторий
+        uses: actions/checkout@v3
+
       # Этот Action сгенерирует для нас красивый SVG файл со статистикой
-      - uses: lowlighter/metrics@latest
+      - name: Generate metrics
+        uses: lowlighter/metrics@latest
         with:
           # Имя файла, который будет создан
           filename: org-stats.svg
@@ -38,7 +46,7 @@ jobs:
           plugin_languages_threshold: 0% # Показывать языки, даже если их процент мал
           plugin_languages_layout: compact # Компактный вид
 
-      # Этот шаг нужен, чтобы закоммитить сгенерированный файл в репозиторий
+      # Этот шаг теперь будет работать, так как репозиторий загружен
       - name: Коммит и пуш SVG
         run: |
           git config user.name "github-actions[bot]"
